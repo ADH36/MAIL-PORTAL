@@ -1,0 +1,146 @@
+// Email Portal - Prisma Schema
+// Database schema for the email management portal
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  name         String
+  role         Role        @default(USER)
+  status       UserStatus  @default(ACTIVE)
+  lastLoginAt  DateTime?   @map("last_login_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  createdBy    String?     @map("created_by") // Admin who created this user
+
+  // Relations
+  emails      Email[]
+  contacts    Contact[]
+  smtpConfigs SmtpConfig[]
+  createdUsers User[] @relation("UserCreatedBy")
+  creator      User?  @relation("UserCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+  @@index([createdBy])
+  @@map("users")
+}
+
+model Email {
+  id           String      @id @default(uuid())
+  userId       String      @map("user_id")
+  smtpConfigId String?     @map("smtp_config_id") // Which SMTP account this email belongs to
+  messageId    String?     @map("message_id")
+  fromAddress  String      @map("from_address")
+  toAddresses  String      @map("to_addresses") @db.Text
+  ccAddresses  String?     @map("cc_addresses") @db.Text
+  bccAddresses String?     @map("bcc_addresses") @db.Text
+  subject      String?     @db.VarChar(500)
+  bodyHtml     String?     @map("body_html") @db.LongText
+  bodyText     String?     @map("body_text") @db.LongText
+  folder       EmailFolder @default(INBOX)
+  isRead       Boolean     @default(false) @map("is_read")
+  isStarred    Boolean     @default(false) @map("is_starred")
+  sentAt       DateTime?   @map("sent_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  smtpConfig  SmtpConfig?  @relation(fields: [smtpConfigId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([userId])
+  @@index([smtpConfigId])
+  @@index([folder])
+  @@index([sentAt(sort: Desc)])
+  @@index([isRead])
+  @@map("emails")
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  emailId     String   @map("email_id")
+  filename    String
+  contentType String?  @map("content_type")
+  fileSize    Int?     @map("file_size")
+  filePath    String   @map("file_path") @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  email Email @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+  @@map("attachments")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  email     String
+  name      String?
+  phone     String?
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+  @@map("contacts")
+}
+
+model SmtpConfig {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  name              String   // Display name for this SMTP account
+  host              String
+  port              Int
+  secure            Boolean  @default(true)
+  username          String
+  passwordEncrypted String   @map("password_encrypted") @db.Text
+  fromName          String?  @map("from_name") // Display name for outgoing emails
+  signature         String?  @db.Text // Email signature
+  isDefault         Boolean  @default(false) @map("is_default") // Default account for this user
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails Email[]
+
+  @@index([userId])
+  @@index([isDefault])
+  @@map("smtp_configs")
+}
+
+enum Role {
+  ADMIN @map("admin")
+  USER  @map("user")
+}
+
+enum UserStatus {
+  ACTIVE    @map("active")
+  INACTIVE  @map("inactive")
+  SUSPENDED @map("suspended")
+}
+
+enum EmailFolder {
+  INBOX   @map("inbox")
+  SENT    @map("sent")
+  DRAFTS  @map("drafts")
+  TRASH   @map("trash")
+  ARCHIVE @map("archive")
+}
