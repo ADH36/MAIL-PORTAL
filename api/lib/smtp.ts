@@ -13,19 +13,40 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-prod
  * Encrypt password for storage
  */
 export function encryptPassword(password: string): string {
-  const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY)
+  const algorithm = 'aes-256-cbc'
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32)
+  const iv = crypto.randomBytes(16)
+  
+  const cipher = crypto.createCipheriv(algorithm, key, iv)
   let encrypted = cipher.update(password, 'utf8', 'hex')
   encrypted += cipher.final('hex')
-  return encrypted
+  
+  return iv.toString('hex') + ':' + encrypted
 }
 
 /**
  * Decrypt password for use
  */
 export function decryptPassword(encryptedPassword: string): string {
-  const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY)
-  let decrypted = decipher.update(encryptedPassword, 'hex', 'utf8')
+  const algorithm = 'aes-256-cbc'
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32)
+  
+  const parts = encryptedPassword.split(':')
+  if (parts.length !== 2) {
+    // Handle old format without IV (fallback)
+    const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY)
+    let decrypted = decipher.update(encryptedPassword, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    return decrypted
+  }
+  
+  const iv = Buffer.from(parts[0], 'hex')
+  const encrypted = parts[1]
+  
+  const decipher = crypto.createDecipheriv(algorithm, key, iv)
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8')
   decrypted += decipher.final('utf8')
+  
   return decrypted
 }
 
@@ -33,9 +54,24 @@ export function decryptPassword(encryptedPassword: string): string {
  * Get SMTP configuration for user
  */
 export async function getSmtpConfig(userId: string) {
-  const config = await prisma.smtpConfig.findUnique({
-    where: { userId }
+  const config = await prisma.smtpConfig.findFirst({
+    where: { 
+      userId,
+      isActive: true,
+      isDefault: true
+    }
   })
+  
+  // If no default config, get the first active one
+  if (!config) {
+    const firstConfig = await prisma.smtpConfig.findFirst({
+      where: { 
+        userId,
+        isActive: true
+      }
+    })
+    if (firstConfig) return firstConfig
+  }
 
   if (!config) {
     // Return default SMTP config from environment
@@ -67,7 +103,7 @@ export async function getSmtpConfig(userId: string) {
 export async function createTransporter(userId: string) {
   const config = await getSmtpConfig(userId)
   
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: config.host,
     port: config.port,
     secure: config.secure,
@@ -141,7 +177,7 @@ export async function testSmtpConnection(smtpConfig: {
   password: string
 }) {
   try {
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       host: smtpConfig.host,
       port: smtpConfig.port,
       secure: smtpConfig.secure,

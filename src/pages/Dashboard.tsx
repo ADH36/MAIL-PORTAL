@@ -57,7 +57,7 @@ export default function Dashboard() {
         emailApi.getEmails({ folder: 'SENT', limit: 1 }),
         emailApi.getEmails({ folder: 'DRAFTS', limit: 1 }),
         emailApi.getEmails({ folder: 'STARRED', limit: 1 }),
-        emailApi.getEmails({ folder: 'ARCHIVED', limit: 1 }),
+        emailApi.getEmails({ folder: 'ARCHIVE', limit: 1 }),
         emailApi.getEmails({ folder: 'TRASH', limit: 1 })
       ])
 

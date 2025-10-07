@@ -35,8 +35,19 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
 
     // Build where clause
     const where: any = {
-      userId: req.user!.id,
-      folder: folder as string
+      userId: req.user!.id
+    }
+
+    // Handle special folder cases
+    if (folder === 'STARRED') {
+      // For starred emails, filter by isStarred=true across all folders
+      where.isStarred = true
+    } else if (folder === 'ARCHIVED') {
+      // Map ARCHIVED to ARCHIVE to match the enum
+      where.folder = 'ARCHIVE'
+    } else {
+      // Regular folder filtering
+      where.folder = folder as string
     }
 
     // Add search functionality

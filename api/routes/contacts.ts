@@ -97,7 +97,7 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res: Res
  */
 router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, email, phone, company, notes } = req.body
+    const { name, email, phone, notes } = req.body
 
     // Validation
     if (!name || !email) {
@@ -131,7 +131,6 @@ router.post('/', authenticateToken, async (req: AuthenticatedRequest, res: Respo
         name,
         email,
         phone: phone || null,
-        company: company || null,
         notes: notes || null
       }
     })
